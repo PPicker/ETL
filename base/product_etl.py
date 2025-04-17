@@ -133,6 +133,7 @@ class BaseProductETL:
                 raw_products = self.extract(brand_name, brand_url)
                 if single:
                     for product in raw_products:
+                        
                         try:
                             product = self.transform_one(product)
                             self.load_one(product)
