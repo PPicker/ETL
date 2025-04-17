@@ -13,13 +13,16 @@ from config.brand_whitelist_loader import load_whitelisted_brands
 from config.env_loader import load_db_config
 from .get_brand_url import load_brand_dict_from_csv
 from utils.fashion_detector import FashionDetector
+from utils.ocr import OCR
 from utils.name_rule import normalize_product_name,normalize_brand_name,get_image_name
 import uuid
+
 
 class Musinsa_ProductETL(BaseProductETL):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)  # 부모 클래스 초기화
         self.fashion_detector = FashionDetector()  # 추가 속성 초기화
+        self.ocr = OCR()
         
     def extract(self,brand_name,brand_url) -> List[dict]:
         product_base_url = "https://api.musinsa.com/api2/dp/v1/plp/goods"
@@ -66,7 +69,36 @@ class Musinsa_ProductETL(BaseProductETL):
         return parse_product_list(products)
 
     def _transform_single_product(self, product: dict) -> dict:
-        image_urls = product['image_urls']
+
+        description_image_urls = product['description_image_urls']
+        description_images = [load_image_from_url(image_url) for image_url in description_image_urls]
+
+        # detector = FashionDetector()
+        is_clothing_list = self.fashion_detector.batch_detect_person(description_images, batch_size=4)
+        all_results = self.fashion_detector.batch_detect_fashion(description_images, batch_size=4)
+
+        is_fashion_list = [result['is_fashion'] for result in all_results]
+
+        # OCR 결과를 모으는 리스트
+        description_raw_list = []
+
+        # 각 이미지를 순회하며 조건에 맞는 이미지에 OCR 실행
+        for idx,(is_clothing, is_fashion, description_image) in enumerate(zip(is_clothing_list, is_fashion_list, description_images)):
+            # 의류도 아니고 패션도 아닐 때만 OCR 실행
+            if  (is_clothing and not is_fashion):
+                description_image_array = np.array(description_image)
+                description_list = self.ocr.run_ocr(description_image_array) #paddle ocr은 PIL.Image를 못받음
+                # OCR 결과(문자열 리스트)를 전체 리스트에 추가
+                description_raw_list.append(' '.join(description_list))
+        # OCR 결과가 있는 경우에만 기존 텍스트 업데이트 또는 추가
+        description_semantic_raw = product['description_txt'] + '\n' #base
+        for description_raw in description_raw_list:
+            description_semantic_raw = description_semantic_raw + description_raw + '\n' #줄바꿈으로 추가
+        product['description_semantic_raw'] = description_semantic_raw
+        
+        '''
+        image urls + thumbnail url처리해줘야함
+        '''
 
         product['product_name_normalized'] = normalize_product_name(product['name'])
         product['brand_normalized'] = normalize_brand_name(product["brand"])
@@ -75,59 +107,77 @@ class Musinsa_ProductETL(BaseProductETL):
             brand=product['brand_normalized'],
             product_name=product['product_name_normalized']
         )
-
-        images = [load_image_from_url(image_url) for image_url in image_urls]
-
-        detector = FashionDetector()
-        is_only_fashion_list = detector.detect_person_in_images(images, batch_size=4)
-
-        image_entries = []
-        thumbnail_flag = False
-        index = 0
-        thumbnail_index = 0 #업데이트가 진짜 만약없으면 0번으로 넣어
-
-        for image_url, is_only_fashion, image in zip(image_urls, is_only_fashion_list, images):
             
-            if is_only_fashion:
-                result = detector.detect_fashion(image)
-                if not result["is_fashion"]:
-                    continue  # 옷만 있는 이미지인데 옷이 아님 → 제거
-
-                entry = {
-                    "clothing_only": True,
-                    "is_thumbnail": False,
-                    "order_index": index,
-                }
-
-                if not thumbnail_flag and not result.get("is_multi_category", False):
-                    entry["is_thumbnail"] = True
-                    product["category"] = result.get("category")
-                    thumbnail_index = index #thumbnail용 엔트리의 인덱스 저장
-                    thumbnail_flag = True
-
-            else:
-                entry = {
-                    "clothing_only": False,
-                    "is_thumbnail": False,
-                    "order_index": index,
-                }
-
+        image_entries = []
+        thumbnail_entry = {}
+        thumbnail_url = product['thumbnail_url']
+        thumbnail_image = load_image_from_url(thumbnail_url)
+        # self.fashion_detector.detect_person(thumbnail_image)
+        '''
+        entry["url"],
+                entry["is_thumbnail"],
+                entry["order_index"], 
+                entry["clothing_only"]
+        '''
+        thumbnail_entry['is_thumbnail'] = True
+        thumbnail_entry["order_index"] = 0
+        thumbnail_entry['clothing_only'] = True
+        image_format = get_normalized_image_format_from_url(thumbnail_url)
+        s3_image_path = s3_image_path_base + f"{uuid.uuid4()}"
+        if (s3_url := upload_pil_image_to_s3(thumbnail_image, s3_image_path, 'ppicker', self.s3_client, format=image_format)):
+            thumbnail_entry['url'] = s3_url
+            image_entries.append(thumbnail_entry)
+        
+        for idx, image_url in enumerate(product["image_urls"]) : 
+            tmp_entry = {'is_thumbnail': False, 
+                         'order_index' : idx +1}
             image_format = get_normalized_image_format_from_url(image_url)
+            image = load_image_from_url(image_url)
+            tmp_entry['clothing_only'] = self.fashion_detector.detect_person(image)
             s3_image_path = s3_image_path_base + f"{uuid.uuid4()}"
             if (s3_url := upload_pil_image_to_s3(image, s3_image_path, 'ppicker', self.s3_client, format=image_format)):
-                entry['url'] = s3_url
-                image_entries.append(entry)
-
-            index += 1
-        product['thumbnail_url'] = image_entries[thumbnail_index]['url'] #thumbnail index의 url을 넣어
-        product['image_entries'] = image_entries
+                tmp_entry['url'] = s3_url
+                image_entries.append(thumbnail_entry)
+        product['image_entries'] = image_entries        
         return product
 
-    def transform(self, products):
-        return [self._transform_single_product(product) for product in products]
+    # def process_image(self,image_url,image, s3_image_path_base,index):
+    #     entry = {}
+    #     image_format = get_normalized_image_format_from_url(image_url)
+    #     s3_image_path = s3_image_path_base + f"{uuid.uuid4()}"
+    #     if (s3_url := upload_pil_image_to_s3(image, s3_image_path, 'ppicker', self.s3_client, format=image_format)):
+    #         entry['url'] = s3_url
+    #         entry['order_index'] = index
+    #         entry['']
 
-    def transform_one(self, product):
-        return self._transform_single_product(product)
+
+
+    # def run(self, single=True):
+    #     '''
+    #     default를 one으로 줘야한다.
+    #     '''
+    #     for brand_name, brand_url in self.brand_dict.items():
+    #         raw_products = self.extract(brand_name, brand_url)
+    #         # for product in raw_products:
+    #         #     product = self.transform_one(product)
+    #         # try:
+    #         #     raw_products = self.extract(brand_name, brand_url)
+    #         #     if single:
+                    
+    #         #             try:
+    #         #                 product = self.transform_one(product)
+    #         #                 self.load_one(product)
+    #         #             except Exception as e:
+    #         #                 print(f"❌ 제품 실패 - {product['name']}: {e}")
+    #         #     else:
+    #         #         try:
+    #         #             products = self.transform(raw_products)
+    #         #             self.load(products)
+    #         #         except Exception as e:
+    #         #             print(f"❌ 일괄 처리 실패 - {brand_name}: {e}")
+
+    #         # except Exception as e:
+    #         #     print(f"❌ 브랜드 실패 - {brand_name}: {e}")
 
 
 

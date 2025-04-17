@@ -6,3 +6,8 @@ __pycache__/
 
 #env파일 무시
 .env
+
+
+#.jpg파일 무시
+*.jpg
+*.jpeg
