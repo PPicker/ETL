@@ -42,9 +42,7 @@ class ETC_ProductETL(BaseProductETL):
         )
 
         images = [load_image_from_url(image_url) for image_url in image_urls]
-
-        detector = FashionDetector()
-        is_only_fashion_list = detector.detect_person_in_images(images, batch_size=4)
+        is_only_fashion_list =  self.fashion_detector.batch_detect_person(images, batch_size=4)
 
         image_entries = []
         thumbnail_flag = False
@@ -54,7 +52,7 @@ class ETC_ProductETL(BaseProductETL):
         for image_url, is_only_fashion, image in zip(image_urls, is_only_fashion_list, images):
             
             if is_only_fashion:
-                result = detector.detect_fashion(image)
+                result = self.fashion_detector.detect_fashion(image)
                 if not result["is_fashion"]:
                     continue  # 옷만 있는 이미지인데 옷이 아님 → 제거
 

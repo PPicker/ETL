@@ -4,56 +4,7 @@ import requests
 from .image_extractor import extract_images
 from .detail_parser import parse_product_detail
 from .. import headers,base_url,chrome_options
-
-
-
-
-# def parse_product_list(response, brand=None):
-#     soup = BeautifulSoup(response.text, 'html.parser')
-#     products = []
-
-#     for item in soup.select('li.item.xans-record-'):
-#         a_tag = item.select_one('a.name')
-#         if not a_tag:
-#             continue
-
-#         product_name = a_tag.get_text(strip=True)
-#         product_href = urljoin(base_url, a_tag.get('href'))
-
-#         price_info_block = item.select_one("ul.xans-product-listitem")
-#         if price_info_block:
-#             price_text = price_info_block.get_text(" ", strip=True)
-#             if "원" not in price_text:
-#                 continue
-
-#             original_price,discounted_price = extract_price(price_text)
-#             if not original_price:
-#                 continue
-#         try:
-#             detail_response = requests.get(product_href, headers=headers)
-#             soup = BeautifulSoup(detail_response.text, 'html.parser')
-
-#             product_detail = parse_product_detail(soup)
-#             image_urls = extract_editor_images(soup)
-#             products.append({
-#                 "name": product_name,
-#                 "brand": brand,
-#                 "category": None,  # 필요 시 분류
-#                 "url": product_href,
-#                 "description_detail": "",
-#                 "description_semantic" : "",
-#                 "description_semantic_raw": "\n".join(product_detail) if product_detail else "",
-#                 "original_price": int(original_price.replace(",", "").replace("원", "")), #아직 할인 옵션 추가 X
-#                 "discounted_price": int(discounted_price.replace(",", "").replace("원", "")) if discounted_price else None, #아직 할인 옵션 추가 X
-#                 "sold_out": False,
-#                 "image_urls": image_urls,
-#             })
-
-#         except Exception as e:
-#             print(f"❌ 상세 페이지 처리 실패: {product_href}, 오류: {e}")
-#             continue
-
-#     return products
+from selenium import webdriver
 
 
 def json2dict(product_json):
@@ -74,55 +25,82 @@ def json2dict(product_json):
 
 
 
+# def parse_product_list(product_jsons):
+#     driver = webdriver.Chrome(options=chrome_options)
+#     products = []
+#     for product_json in product_jsons:
+#         product = json2dict(product_json)
+#         product['image_urls'] =extract_images(product['url'])
+#         print(product)
+#         description_txt,description_image_urls = parse_product_detail(product['url'],driver) #꺼내오기만함 아직 가공 안되어있음
+#         product['description_txt'] = description_txt
+#         product['description_image_urls'] = description_image_urls
+#         products.append(product)
+#     return products
+
 def parse_product_list(product_jsons):
-    driver = webdriver.Chrome(options=chrome_options)
-    for product_json in product_jsons:
-        product = json2dict(product_json)
-        product['image_urls'] =extract_images(product['url'])
-        print(product)
+    products = []
+    driver = None
+    max_retries = 3  # 최대 재시도 횟수
+    
+    i = 0
+    while i < len(product_jsons):
+        product_json = product_jsons[i]
+        retry_count = 0
         
-
-        exit()
-    return products_data
-
-
-
-
-                # wait = WebDriverWait(driver, 30)
+        while retry_count < max_retries:
+            try:
+                # 드라이버가 없으면 새로 생성
+                if driver is None:
+                    driver = webdriver.Chrome(options=chrome_options)
                 
-                # # 2. 버튼 클릭하기: 버튼이 클릭 가능한 상태를 기다립니다.
-                # button = wait.until(EC.element_to_be_clickable(
-                #     (By.CSS_SELECTOR, "button.gtm-click-button[data-button-id='prd_detail_open']")
-                # ))
-                # driver.execute_script("arguments[0].scrollIntoView(true);", button)
-                # driver.execute_script("arguments[0].click();", button)
+                product = json2dict(product_json)
+                try:
+                    product['image_urls'] = extract_images(product['url'])
+                except Exception as e:
+                    print(f"⚠️ 이미지 추출 실패 - {product.get('name', 'unknown')}: {str(e)}")
+                    product['image_urls'] = []
                 
-                # # 3. 컨텐츠 로드 대기: 클래스가 "text-xs font-normal text-black font-pretendard"인 모든 요소
-                # containers = wait.until(EC.presence_of_all_elements_located(
-                #     (By.CSS_SELECTOR, ".text-xs.font-normal.text-black.font-pretendard")
-                # ))
+                print(f"Processing: {product.get('name', 'unknown')} (시도 {retry_count+1}/{max_retries})")
                 
-                # # 필요한 경우, 마지막 요소 대신 모든 요소를 순회할 수도 있음
-                # container = containers[-1]
-                # text_content = container.text
-                # if text_content:
-                #     descriptions.append(text_content)
-                # else:
-                #     '''
-                #     text가 없는 경우에만 image를 뽑도록 로직 조정
-                #     '''
-                #     print('Text 형태로 저장되어있지 않습니다')
-                #     descriptions.append('') #일단 공백 보내
-                    # # (c) <img> 태그의 src에서 .jpg 또는 .svg 파일 URL 추출
-                    # imgs = container.find_elements(By.TAG_NAME, "img")
-                    # image_urls = []
-                    # for img in imgs:
-                    #     src = img.get_attribute("src")
-                    #     if src and ('.jpg' in src.lower() or '.svg' in src.lower()):
-                    #         image_urls.append(src)
-                    
-                    # print("Image URLs:", image_urls)
-
+                description_txt, description_image_urls = parse_product_detail(product['url'], driver)
+                product['description_txt'] = description_txt
+                product['description_image_urls'] = description_image_urls
+                
+                # 성공적으로 처리되면 제품 추가 및 내부 루프 탈출
+                products.append(product)
+                break
+                
+            except Exception as e:
+                retry_count += 1
+                print(f"❌ 파싱 실패 - {product_json.get('name', 'unknown')} (시도 {retry_count}/{max_retries}): {str(e)}")
+                
+                # 드라이버 재시작
+                try:
+                    driver.quit()
+                except:
+                    pass
+                driver = webdriver.Chrome(options=chrome_options)
+                
+                # 최대 재시도 횟수에 도달하면
+                if retry_count >= max_retries:
+                    print(f"⚠️ 최대 재시도 횟수 초과 - {product_json.get('name', 'unknown')} 건너뜀")
+                    # 빈 정보로 제품 추가 (선택사항)
+                    product['description_txt'] = None
+                    product['description_image_urls'] = []
+                    products.append(product)
+        
+        # 다음 제품으로 이동
+        i += 1
+    
+    # 마지막에 드라이버 종료
+    if driver:
+        try:
+            driver.quit()
+        except:
+            pass
+            
+    return products
 
 if __name__ =='__main__':
     import requests
