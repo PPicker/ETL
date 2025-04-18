@@ -14,3 +14,6 @@ __pycache__/
 
 #index파일 무시
 *.index
+
+#faiss 디렉토리도 무시
+faiss/
