@@ -79,7 +79,6 @@ class ETC_ProductETL(BaseProductETL):
             if (s3_url := upload_pil_image_to_s3(image, s3_image_path, 'ppicker', self.s3_client, format=image_format)):
                 entry['url'] = s3_url
                 image_entries.append(entry)
-
             index += 1
         product['thumbnail_url'] = image_entries[thumbnail_index]['url'] #thumbnail index의 url을 넣어
         product['image_entries'] = image_entries
@@ -93,7 +92,5 @@ if __name__ == '__main__':
     whitelist = load_whitelisted_brands()
     my_brands = whitelist["etcseoul"]
     brand_dict = {name: url for name, url in all_urls.items() if name in my_brands}
-    # for name in brand_dict:
-    #     print(name)
     etc_product_etl = ETC_ProductETL(brand_dict = brand_dict, platform='ETCSeoul',db_config=load_db_config())
     etc_product_etl.run()
