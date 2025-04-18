@@ -43,14 +43,13 @@ class ETC_ProductETL(BaseProductETL):
 
         images = [load_image_from_url(image_url) for image_url in image_urls]
         is_only_fashion_list =  self.fashion_detector.batch_detect_person(images, batch_size=4)
-
+        
         image_entries = []
         thumbnail_flag = False
         index = 0
         thumbnail_index = 0 #업데이트가 진짜 만약없으면 0번으로 넣어
 
         for image_url, is_only_fashion, image in zip(image_urls, is_only_fashion_list, images):
-            
             if is_only_fashion:
                 result = self.fashion_detector.detect_fashion(image)
                 if not result["is_fashion"]:
@@ -86,13 +85,6 @@ class ETC_ProductETL(BaseProductETL):
         product['image_entries'] = image_entries
         return product
 
-    def transform(self, products):
-        return [self._transform_single_product(product) for product in products]
-
-    def transform_one(self, product):
-        return self._transform_single_product(product)
-
-
 
 if __name__ == '__main__':
     current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -101,5 +93,7 @@ if __name__ == '__main__':
     whitelist = load_whitelisted_brands()
     my_brands = whitelist["etcseoul"]
     brand_dict = {name: url for name, url in all_urls.items() if name in my_brands}
+    # for name in brand_dict:
+    #     print(name)
     etc_product_etl = ETC_ProductETL(brand_dict = brand_dict, platform='ETCSeoul',db_config=load_db_config())
     etc_product_etl.run()
