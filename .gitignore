@@ -11,3 +11,9 @@ __pycache__/
 #.jpg파일 무시
 *.jpg
 *.jpeg
+
+#index파일 무시
+*.index
+
+#faiss 디렉토리도 무시
+faiss/
