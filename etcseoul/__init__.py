@@ -4,5 +4,5 @@ headers = {
                        "AppleWebKit/537.36 (KHTML, like Gecko) "
                        "Chrome/95.0.4638.69 Safari/537.36")
 }
-base_url = 'https://www.musinsa.com'
+base_url = 'https://www.etcseoul.com'
 
