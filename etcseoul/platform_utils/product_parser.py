@@ -15,7 +15,7 @@ def parse_product_list(response, brand=None):
         if not a_tag:
             continue
 
-        product_name = a_tag.get_text(strip=True)
+        product_name = a_tag.get_text(strip=True).replace(':','') #없애 갑자기 이게 붙네 왜지???
         product_href = urljoin(base_url, a_tag.get('href'))
 
         price_info_block = item.select_one("ul.xans-product-listitem")
