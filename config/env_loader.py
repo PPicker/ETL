@@ -1,6 +1,7 @@
 import os
 from dotenv import load_dotenv
 
+
 def load_db_config(env_file: str = ".env"):
     """
     지정된 .env 파일을 로드하고, DB 설정 딕셔너리 반환
@@ -12,10 +13,8 @@ def load_db_config(env_file: str = ".env"):
         "port": int(os.getenv("DB_PORT", 5432)),
         "dbname": os.getenv("DB_NAME"),
         "user": os.getenv("DB_USER"),
-        "password": os.getenv("DB_PASSWORD")
+        "password": os.getenv("DB_PASSWORD"),
     }
-
-
 
 
 def load_aws_config(env_file: str = ".env"):

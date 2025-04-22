@@ -2,6 +2,7 @@ from typing import Dict
 import psycopg2
 from utils.name_rule import normalize_brand_name
 
+
 class BaseBrandETL:
     def __init__(self, brand_dict, platform="unknown", db_config=None):
         self.brand_dict = brand_dict
@@ -11,7 +12,7 @@ class BaseBrandETL:
             "port": 5432,
             "dbname": "fashion_db",
             "user": "fashion_user",
-            "password": "fashion_pass"
+            "password": "fashion_pass",
         }
 
     def connect_to_db(self):
@@ -39,7 +40,7 @@ class BaseBrandETL:
             brand_data["name_normalized"],
             brand_data["url"],
             brand_data.get("description", ""),
-            self.platform
+            self.platform,
         )
 
         try:

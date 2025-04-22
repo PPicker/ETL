@@ -1,6 +1,8 @@
 import re
 from bs4 import BeautifulSoup
+
 price_pattern = r"\s*:\s*(\d{1,3}(?:,\d{3})*원)(?:\s*:\s*(\d{1,3}(?:,\d{3})*원))?"
+
 
 def extract_price(price_text):
     match = re.search(price_pattern, price_text)
@@ -9,6 +11,8 @@ def extract_price(price_text):
         discounted = match.group(2)
         return original, discounted or None
     return None, None
+
+
 # def extract_price(soup):
 
 #     original_price = soup.find(id="span_product_price_text").get_text(strip=True)

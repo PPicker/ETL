@@ -4,13 +4,16 @@ from urllib.parse import urljoin
 import os
 import csv
 
+
 def main():
     base_url = "https://www.etcseoul.com"
     url = base_url + "/brand.html"
     headers = {
-        "User-Agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                       "AppleWebKit/537.36 (KHTML, like Gecko) "
-                       "Chrome/95.0.4638.69 Safari/537.36")
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/95.0.4638.69 Safari/537.36"
+        )
     }
 
     try:
@@ -20,7 +23,7 @@ def main():
         print("페이지 요청 중 오류 발생:", e)
         return
 
-    soup = BeautifulSoup(response.text, 'html.parser')
+    soup = BeautifulSoup(response.text, "html.parser")
     item_boxes = soup.select(".item_box")
     brand_dict = {}
 
@@ -42,10 +45,10 @@ def main():
 
     # CSV 저장
     current_dir = os.path.dirname(os.path.abspath(__file__))
-    csv_file_path = os.path.join(current_dir, 'brand_urls.csv')
+    csv_file_path = os.path.join(current_dir, "brand_urls.csv")
 
     try:
-        with open(csv_file_path, 'w', newline='', encoding='utf-8') as f:
+        with open(csv_file_path, "w", newline="", encoding="utf-8") as f:
             writer = csv.writer(f)
             writer.writerow(["brand_name", "url"])
             for name, url in brand_dict.items():
@@ -58,7 +61,7 @@ def main():
 def load_brand_dict_from_csv(csv_path):
     brand_dict = {}
     try:
-        with open(csv_path, 'r', encoding='utf-8') as f:
+        with open(csv_path, "r", encoding="utf-8") as f:
             reader = csv.DictReader(f)
             for row in reader:
                 brand_dict[row["brand_name"]] = row["url"]
@@ -67,8 +70,7 @@ def load_brand_dict_from_csv(csv_path):
     return brand_dict
 
 
-
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
 
     # 테스트 로딩 (필요시 주석 해제)
