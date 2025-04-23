@@ -14,9 +14,10 @@ from .platform_utils.image_extractor import (
     get_normalized_image_format_from_url,
 )
 from config.brand_whitelist_loader import load_whitelisted_brands
-from config.env_loader import load_db_config
+from config.env_loader import load_environment
 from .get_brand_url import load_brand_dict_from_csv
 from utils.fashion_detector import FashionDetector
+from utils.gemini_categorizer import gemini_categorizer
 from utils.name_rule import normalize_product_name, normalize_brand_name, get_image_name
 import uuid
 
@@ -25,6 +26,7 @@ class ETC_ProductETL(BaseProductETL):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)  # 부모 클래스 초기화
         self.fashion_detector = FashionDetector()  # 추가 속성 초기화
+        self.s3_bucket = os.getenv("AWS_S3_BUCKET_NAME")
 
     def extract(self, brand_name, brand_url) -> List[dict]:
         try:
@@ -37,7 +39,8 @@ class ETC_ProductETL(BaseProductETL):
 
     def _transform_single_product(self, product: dict) -> dict:
         image_urls = product["image_urls"]
-
+        product["name"] = product["name"].split('_', 1)[-1] #이름에서 색상도 꺼낼수있긴한데 일단 이렇게 두자 
+        product["category"] = gemini_categorizer(product["name"]) #outer , top ,bottom 중 하나, 향후 비동기 + Batch로 수정해서 시간 줄이자
         product["product_name_normalized"] = normalize_product_name(product["name"])
         product["brand_normalized"] = normalize_brand_name(product["brand"])
         s3_image_path_base = get_image_name(
@@ -45,12 +48,10 @@ class ETC_ProductETL(BaseProductETL):
             brand=product["brand_normalized"],
             product_name=product["product_name_normalized"],
         )
-
         images = [load_image_from_url(image_url) for image_url in image_urls]
         is_only_fashion_list = self.fashion_detector.batch_detect_person(
             images, batch_size=4
         )
-
         image_entries = []
         thumbnail_flag = False
         index = 0
@@ -72,7 +73,7 @@ class ETC_ProductETL(BaseProductETL):
 
                 if not thumbnail_flag and not result.get("is_multi_category", False):
                     entry["is_thumbnail"] = True
-                    product["category"] = result.get("category")
+                    # product["category"] = result.get("category") #정확도 이슈가 좀 크다 이름 기반으로 수정
                     thumbnail_index = index  # thumbnail용 엔트리의 인덱스 저장
                     thumbnail_flag = True
 
@@ -83,29 +84,33 @@ class ETC_ProductETL(BaseProductETL):
                     "order_index": index,
                 }
 
+            
             image_format = get_normalized_image_format_from_url(image_url)
-            s3_image_path = s3_image_path_base + f"{uuid.uuid4()}"
+            s3_image_path = s3_image_path_base + f"{uuid.uuid4()}" #이게 key가 된다
             if s3_url := upload_pil_image_to_s3(
-                image, s3_image_path, "ppicker", self.s3_client, format=image_format
+                image, s3_image_path, self.s3_bucket, self.s3_client, format=image_format
             ):
-                entry["url"] = s3_url
+                entry["key"] = s3_image_path #key로 업데이트
                 image_entries.append(entry)
             index += 1
-        product["thumbnail_url"] = image_entries[thumbnail_index][
-            "url"
-        ]  # thumbnail index의 url을 넣어
+        product["thumbnail_key"] = image_entries[thumbnail_index][
+            "key"
+        ]  # thumbnail index의 key를 넣어
         product["image_entries"] = image_entries
         return product
 
 
 if __name__ == "__main__":
+    load_environment()
     current_dir = os.path.dirname(os.path.abspath(__file__))
     csv_path = os.path.join(current_dir, "brand_urls.csv")
     all_urls = load_brand_dict_from_csv(csv_path)
     whitelist = load_whitelisted_brands()
-    my_brands = whitelist["etcseoul"]
+    my_brands = whitelist["etcseoul"] #하나만 잘라
     brand_dict = {name: url for name, url in all_urls.items() if name in my_brands}
+    # print(brand_dict)
+
     etc_product_etl = ETC_ProductETL(
-        brand_dict=brand_dict, platform="ETCSeoul", db_config=load_db_config()
+        brand_dict=brand_dict, platform="ETCSeoul",
     )
     etc_product_etl.run()

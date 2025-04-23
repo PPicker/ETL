@@ -6,6 +6,7 @@ import cv2
 import numpy as np
 from ultralytics import YOLO
 from typing import List, Dict
+from transformers import YolosImageProcessor
 
 
 class FashionDetector:
@@ -92,9 +93,14 @@ class FashionDetector:
         fashion_threshold=0.3,
     ):
         # 패션 모델 로드
-        self.processor = AutoImageProcessor.from_pretrained(
-            fashion_model_name, use_fast=True
+        # self.processor = AutoImageProcessor.from_pretrained(
+        #     fashion_model_name, use_fast=True
+        # )
+        self.processor = YolosImageProcessor.from_pretrained(
+            "valentinafeve/yolos-fashionpedia",
+            trust_remote_code=True
         )
+        
         self.fashion_model = AutoModelForObjectDetection.from_pretrained(
             fashion_model_name
         )

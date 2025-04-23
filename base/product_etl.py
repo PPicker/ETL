@@ -1,24 +1,14 @@
 from typing import List, Dict
 import psycopg2
 from utils.name_rule import normalize_product_name, normalize_brand_name
-from utils.aws import get_s3_client
+from .config_etl import ETLBaseConfig
 
 
-class BaseProductETL:
-    def __init__(self, brand_dict, platform="unknown", db_config: Dict = None):
+class BaseProductETL(ETLBaseConfig):
+    def __init__(self, brand_dict, platform="unknown"):
+        super().__init__()
         self.brand_dict = brand_dict
         self.platform = platform
-        self.db_config = db_config or {
-            "host": "localhost",
-            "port": 5432,
-            "dbname": "fashion_db",
-            "user": "fashion_user",
-            "password": "fashion_pass",
-        }
-        self.s3_client = get_s3_client()
-
-    def connect_to_db(self):
-        return psycopg2.connect(**self.db_config)
 
     def extract(self, brand_name, brand_url) -> List[dict]:
         """
@@ -52,7 +42,7 @@ class BaseProductETL:
         INSERT INTO products
         (name, brand, brand_normalized, product_name_normalized, category, url,
         description_detail, description_semantic_raw, description_semantic,
-        original_price, discounted_price, sold_out, thumbnail_url, updated_at)
+        original_price, discounted_price, sold_out, thumbnail_key, updated_at)
         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now())
         ON CONFLICT (name, brand) DO UPDATE
         SET
@@ -64,13 +54,13 @@ class BaseProductETL:
             original_price = EXCLUDED.original_price,
             discounted_price = EXCLUDED.discounted_price,
             sold_out = EXCLUDED.sold_out,
-            thumbnail_url = EXCLUDED.thumbnail_url,
+            thumbnail_key = EXCLUDED.thumbnail_key,
             updated_at = now()
         RETURNING id;
         """
 
         image_query = """
-        INSERT INTO product_images (product_id, url, is_thumbnail, order_index, clothing_only)
+        INSERT INTO product_images (product_id, key, is_thumbnail, order_index, clothing_only)
         VALUES (%s, %s, %s, %s, %s);
         """
 
@@ -81,7 +71,7 @@ class BaseProductETL:
                 p["brand"],
                 p["brand_normalized"],
                 p["product_name_normalized"],
-                p["category"],
+                p.get("category", None),
                 p["url"],
                 p.get("description_detail", ""),
                 p.get("description_semantic_raw", ""),
@@ -89,7 +79,7 @@ class BaseProductETL:
                 p.get("original_price"),
                 p.get("discounted_price"),
                 p["sold_out"],
-                p.get("thumbnail_url", None),  # 여기에 thumbnail_url 추가
+                p.get("thumbnail_key", None),  # 여기에 thumbnail_key 추가
             ),
         )
 
@@ -100,7 +90,7 @@ class BaseProductETL:
                 image_query,
                 (
                     product_id,
-                    entry["url"],
+                    entry["key"],
                     entry["is_thumbnail"],
                     entry["order_index"],
                     entry["clothing_only"],

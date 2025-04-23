@@ -1,22 +1,12 @@
 from typing import Dict
-import psycopg2
 from utils.name_rule import normalize_brand_name
+from .config_etl import ETLBaseConfig
 
-
-class BaseBrandETL:
-    def __init__(self, brand_dict, platform="unknown", db_config=None):
+class BaseBrandETL(ETLBaseConfig):
+    def __init__(self, brand_dict, platform="unknown"):
+        super().__init__()
         self.brand_dict = brand_dict
         self.platform = platform
-        self.db_config = db_config or {
-            "host": "localhost",
-            "port": 5432,
-            "dbname": "fashion_db",
-            "user": "fashion_user",
-            "password": "fashion_pass",
-        }
-
-    def connect_to_db(self):
-        return psycopg2.connect(**self.db_config)
 
     def extract(self, brand_name: str, brand_url: str) -> dict:
         raise NotImplementedError
