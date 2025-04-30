@@ -1,23 +1,16 @@
 from typing import List, Dict
 import psycopg2
-from utils.name_rule import normalize_product_name,normalize_brand_name
-from utils.aws import get_s3_client
-class BaseProductETL:
-    def __init__(self, brand_dict, platform="unknown", db_config: Dict = None):
+from utils.name_rule import normalize_product_name, normalize_brand_name
+from .config_etl import ETLBaseConfig
+
+
+class BaseProductETL(ETLBaseConfig):
+    def __init__(self, brand_dict, platform="unknown"):
+        super().__init__()
         self.brand_dict = brand_dict
         self.platform = platform
-        self.db_config = db_config or {
-            "host": "localhost",
-            "port": 5432,
-            "dbname": "fashion_db",
-            "user": "fashion_user",
-            "password": "fashion_pass"
-        }
-        self.s3_client = get_s3_client()
-    def connect_to_db(self):
-        return psycopg2.connect(**self.db_config)
 
-    def extract(self,brand_name,brand_url) -> List[dict]:
+    def extract(self, brand_name, brand_url) -> List[dict]:
         """
         상품 목록 추출
         각 상품은 다음과 같은 dict 구조여야 함:
@@ -34,7 +27,7 @@ class BaseProductETL:
         }
         """
         raise NotImplementedError
-    
+
     def _transform_single_product(self, product: dict) -> dict:
         return product
 
@@ -44,13 +37,12 @@ class BaseProductETL:
     def transform_one(self, product):
         return self._transform_single_product(product)
 
-
     def _insert_product_and_images(self, cursor, p: dict):
         product_query = """
         INSERT INTO products
         (name, brand, brand_normalized, product_name_normalized, category, url,
         description_detail, description_semantic_raw, description_semantic,
-        original_price, discounted_price, sold_out, thumbnail_url, updated_at)
+        original_price, discounted_price, sold_out, thumbnail_key, updated_at)
         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now())
         ON CONFLICT (name, brand) DO UPDATE
         SET
@@ -62,42 +54,48 @@ class BaseProductETL:
             original_price = EXCLUDED.original_price,
             discounted_price = EXCLUDED.discounted_price,
             sold_out = EXCLUDED.sold_out,
-            thumbnail_url = EXCLUDED.thumbnail_url,
+            thumbnail_key = EXCLUDED.thumbnail_key,
             updated_at = now()
         RETURNING id;
         """
 
         image_query = """
-        INSERT INTO product_images (product_id, url, is_thumbnail, order_index, clothing_only)
+        INSERT INTO product_images (product_id, key, is_thumbnail, order_index, clothing_only)
         VALUES (%s, %s, %s, %s, %s);
         """
 
-        cursor.execute(product_query, (
-            p["name"],
-            p["brand"],
-            p["brand_normalized"],
-            p["product_name_normalized"],
-            p["category"],
-            p["url"],
-            p.get("description_detail", ""),
-            p.get("description_semantic_raw", ""),
-            p.get("description_semantic", ""),
-            p.get("original_price"),
-            p.get("discounted_price"),
-            p["sold_out"],
-            p.get("thumbnail_url", None)  # 여기에 thumbnail_url 추가
-        ))
+        cursor.execute(
+            product_query,
+            (
+                p["name"],
+                p["brand"],
+                p["brand_normalized"],
+                p["product_name_normalized"],
+                p.get("category", None),
+                p["url"],
+                p.get("description_detail", ""),
+                p.get("description_semantic_raw", ""),
+                p.get("description_semantic", ""),
+                p.get("original_price"),
+                p.get("discounted_price"),
+                p["sold_out"],
+                p.get("thumbnail_key", None),  # 여기에 thumbnail_key 추가
+            ),
+        )
 
         product_id = cursor.fetchone()[0]
 
         for entry in p.get("image_entries", []):
-            cursor.execute(image_query, (
-                product_id,
-                entry["url"],
-                entry["is_thumbnail"],
-                entry["order_index"],
-                entry["clothing_only"]
-            ))
+            cursor.execute(
+                image_query,
+                (
+                    product_id,
+                    entry["key"],
+                    entry["is_thumbnail"],
+                    entry["order_index"],
+                    entry["clothing_only"],
+                ),
+            )
 
     def load(self, products: List[dict]):
         try:
@@ -111,9 +109,9 @@ class BaseProductETL:
             print(f"❌ 상품 저장 실패 ({self.platform}): {e}")
 
     def load_one(self, p: dict):
-        '''
+        """
         안정성을 위해 하나씩 transform 후 하나씩 load
-        '''
+        """
         try:
             with self.connect_to_db() as conn:
                 with conn.cursor() as cursor:
@@ -121,19 +119,20 @@ class BaseProductETL:
                 conn.commit()
             print(f"✅ 저장 완료: {p['name']} ({self.platform})")
         except Exception as e:
-            print(f"❌ 저장 실패 - 상품명: {p.get('name', 'UNKNOWN')} / 브랜드: {p.get('brand', 'UNKNOWN')} - 오류: {e}")
-
+            print(
+                f"❌ 저장 실패 - 상품명: {p.get('name', 'UNKNOWN')} / 브랜드: {p.get('brand', 'UNKNOWN')} - 오류: {e}"
+            )
 
     def run(self, single=True):
-        '''
+        """
         default를 one으로 줘야한다.
-        '''
+        """
         for brand_name, brand_url in self.brand_dict.items():
             try:
                 raw_products = self.extract(brand_name, brand_url)
                 if single:
                     for product in raw_products:
-                        
+
                         try:
                             product = self.transform_one(product)
                             self.load_one(product)

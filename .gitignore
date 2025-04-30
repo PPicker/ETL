@@ -6,8 +6,11 @@ __pycache__/
 
 #env파일 무시
 .env
+.env.prod
+.env.test
 
+#index파일 무시
+*.index
 
-#.jpg파일 무시
-*.jpg
-*.jpeg
+#faiss 디렉토리도 무시
+faiss/
