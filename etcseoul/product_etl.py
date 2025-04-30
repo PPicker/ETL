@@ -106,7 +106,7 @@ if __name__ == "__main__":
     csv_path = os.path.join(current_dir, "brand_urls.csv")
     all_urls = load_brand_dict_from_csv(csv_path)
     whitelist = load_whitelisted_brands()
-    my_brands = whitelist["etcseoul"] #하나만 잘라
+    my_brands = whitelist["etcseoul"]  #rough side 디버깅 필요
     brand_dict = {name: url for name, url in all_urls.items() if name in my_brands}
     # print(brand_dict)
 

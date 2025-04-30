@@ -17,7 +17,7 @@ def parse_product_list(response, brand=None):
 
         product_name = a_tag.get_text(strip=True).replace(
             ":", ""
-        )  # 없애 갑자기 이게 붙네 왜지???
+        ).strip()  # 없애 갑자기 이게 붙네 왜지???
         product_href = urljoin(base_url, a_tag.get("href"))
 
         price_info_block = item.select_one("ul.xans-product-listitem")
@@ -44,7 +44,7 @@ def parse_product_list(response, brand=None):
                     "description_detail": "",
                     "description_semantic": "",
                     "description_semantic_raw": (
-                        "\n".join(product_detail) if product_detail else ""
+                        product_detail if product_detail else ""
                     ),
                     "original_price": int(
                         original_price.replace(",", "").replace("원", "")
