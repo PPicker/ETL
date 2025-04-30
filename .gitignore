@@ -4,6 +4,15 @@ __pycache__/
 # .pt파일 무시
 *.pt
 
+
+#prompt_images 디렉토리도 무시
+prompt_images/
+example_images/
+
+#이미지 무시
+*.jgp
+*.webp
+
 #env파일 무시
 .env
 .env.prod

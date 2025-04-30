@@ -146,6 +146,7 @@ def gemini_categorizer(name: str) -> Optional[str]:
             if chunk.text:
                 response += chunk.text
         
+        print(response)
         # JSON 파싱 및 카테고리 추출
         json_response = json.loads(response)
         category = json_response.get('category')
@@ -164,8 +165,9 @@ def gemini_categorizer(name: str) -> Optional[str]:
         return None  # 모든 오류 상황에서 None 반환
 
 if __name__ == "__main__":
-    from config.env_loader import load_environment
-    load_environment()
+    # from config.env_loader import load_environment
+    from dotenv import load_dotenv
+    load_dotenv()
     # 테스트할 옷 이름 목록
     test_items = ['shirt', 'Denim Pants', 'Wool Coat', 'Leather Belt', '회색', '검은색 매치할 수 있는 무언가']
     for item in test_items:
