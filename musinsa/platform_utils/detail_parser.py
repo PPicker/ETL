@@ -6,6 +6,8 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.chrome.options import Options
 
 
+
+
 def parse_product_detail(url, driver):
 
     driver.get(url)

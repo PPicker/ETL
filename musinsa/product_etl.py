@@ -14,7 +14,7 @@ from .platform_utils.image_extractor import (
     get_normalized_image_format_from_url,
 )
 from config.brand_whitelist_loader import load_whitelisted_brands
-from config.env_loader import load_db_config
+from config.env_loader import load_db_config,load_environment
 from .get_brand_url import load_brand_dict_from_csv
 from utils.fashion_detector import FashionDetector
 from utils.ocr import OCR
@@ -84,7 +84,6 @@ class Musinsa_ProductETL(BaseProductETL):
         description_images = [
             load_image_from_url(image_url) for image_url in description_image_urls
         ]
-
         # detector = FashionDetector()
         is_clothing_list = self.fashion_detector.batch_detect_person(
             description_images, batch_size=4
@@ -117,6 +116,7 @@ class Musinsa_ProductETL(BaseProductETL):
                 description_semantic_raw + description_raw + "\n"
             )  # 줄바꿈으로 추가
         product["description_semantic_raw"] = description_semantic_raw
+
 
         """
         image urls + thumbnail url처리해줘야함
@@ -153,7 +153,8 @@ class Musinsa_ProductETL(BaseProductETL):
             self.s3_client,
             format=image_format,
         ):
-            thumbnail_entry["url"] = s3_url
+            thumbnail_entry["key"] = s3_image_path
+            product['thumbnail_key'] = s3_image_path
             image_entries.append(thumbnail_entry)
 
         for idx, image_url in enumerate(product["image_urls"]):
@@ -165,55 +166,20 @@ class Musinsa_ProductETL(BaseProductETL):
             if s3_url := upload_pil_image_to_s3(
                 image, s3_image_path, "ppicker", self.s3_client, format=image_format
             ):
-                tmp_entry["url"] = s3_url
+                tmp_entry["key"] = s3_image_path
                 image_entries.append(thumbnail_entry)
         product["image_entries"] = image_entries
         return product
 
-    # def process_image(self,image_url,image, s3_image_path_base,index):
-    #     entry = {}
-    #     image_format = get_normalized_image_format_from_url(image_url)
-    #     s3_image_path = s3_image_path_base + f"{uuid.uuid4()}"
-    #     if (s3_url := upload_pil_image_to_s3(image, s3_image_path, 'ppicker', self.s3_client, format=image_format)):
-    #         entry['url'] = s3_url
-    #         entry['order_index'] = index
-    #         entry['']
-
-    # def run(self, single=True):
-    #     '''
-    #     default를 one으로 줘야한다.
-    #     '''
-    #     for brand_name, brand_url in self.brand_dict.items():
-    #         raw_products = self.extract(brand_name, brand_url)
-    #         # for product in raw_products:
-    #         #     product = self.transform_one(product)
-    #         # try:
-    #         #     raw_products = self.extract(brand_name, brand_url)
-    #         #     if single:
-
-    #         #             try:
-    #         #                 product = self.transform_one(product)
-    #         #                 self.load_one(product)
-    #         #             except Exception as e:
-    #         #                 print(f"❌ 제품 실패 - {product['name']}: {e}")
-    #         #     else:
-    #         #         try:
-    #         #             products = self.transform(raw_products)
-    #         #             self.load(products)
-    #         #         except Exception as e:
-    #         #             print(f"❌ 일괄 처리 실패 - {brand_name}: {e}")
-
-    #         # except Exception as e:
-    #         #     print(f"❌ 브랜드 실패 - {brand_name}: {e}")
-
 
 if __name__ == "__main__":
+    load_environment()
     whitelist = load_whitelisted_brands()
     my_brands = whitelist["musinsa"]
     base_url = "https://www.musinsa.com"
     brand_dict = {brand: f"{base_url}/brand/{brand}" for brand in my_brands}
 
     etc_product_etl = Musinsa_ProductETL(
-        brand_dict=brand_dict, platform="musinsa", db_config=load_db_config()
+        brand_dict=brand_dict, platform="musinsa"
     )
     etc_product_etl.run()

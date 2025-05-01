@@ -42,6 +42,7 @@ def json2dict(product_json):
 #     return products
 
 
+
 def parse_product_list(product_jsons):
     products = []
     driver = None
