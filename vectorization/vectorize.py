@@ -11,6 +11,30 @@ from utils.aws import get_s3_client
 from pgvector.psycopg2 import register_vector
 
 
+def build_embedding_query(item: dict, use_prefix: bool = False) -> str:
+    """
+    item: 상품 메타데이터 dict
+    use_prefix=True  -> 'vibe: … silhouette: …'
+    use_prefix=False -> '… … …'
+    """
+    mapping = {
+        "분위기 및 지향점": "vibe",
+        "실루엣": "silhouette",
+        "디테일": "detail",
+    }
+
+    parts = []
+    for ko_field, en_prefix in mapping.items():
+        val = item.get(ko_field)
+        if not val:
+            continue
+        parts.append(
+            f"{en_prefix}: {val}" if use_prefix else val
+        )
+
+    return " ".join(parts).strip()
+
+
 class Vectorizer:
     """
     S3에서 이미지 로드 → 임베딩 생성 → FAISS 인덱스 갱신/검색 → PostgreSQL 메타 정보 조회
@@ -39,13 +63,16 @@ class Vectorizer:
         conn = psycopg2.connect(**self.db_config)
         register_vector(conn)
         cur = conn.cursor()
-        cur.execute("SELECT id, description FROM products WHERE embedding is NULL;")
+        #cur.execute("SELECT id, description FROM products WHERE embedding is NULL;")
+        #cur.execute("SELECT id, description FROM products WHERE description is NOT NULL AND embedding is NULL;")
+        cur.execute("SELECT id, description FROM products WHERE description is NOT NULL")
         rows = cur.fetchall()
         if not rows:
             print("✅ 벡터화할 신규 상품이 없습니다.")
             conn.close()
             return
         for prod_id, description in rows:
+            #query =build_embedding_query(description, use_prefix=True)
             try:
                 emb = self.embedder.embed(description)
                 cur.execute(

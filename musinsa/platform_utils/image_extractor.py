@@ -34,56 +34,135 @@ def get_normalized_image_format_from_url(url):
 #     return list(dict.fromkeys([urljoin(base_url, img['src']) for img in imgs]))
 
 
+# def extract_images(url):
+#     """
+#     지정한 URL의 HTML에서 src 속성에 '/web/upload/NNEditor/'가 포함된 <img> 태그의 절대 URL을 리스트로 반환합니다.
+#     """
+
+#     response = requests.get(url, headers=headers)
+#     soup = BeautifulSoup(response.text, "html.parser")
+
+#     # ✅ soup 전체 HTML 문자열로 변환
+
+#     images = []
+
+#     # window.__MSS__.product.state에서 goodsImages 데이터 찾기
+#     script_tags = soup.find_all("script")
+#     for script in script_tags:
+#         if script.string and "goodsImages" in script.string:
+#             # JSON 데이터 추출
+#             json_match = re.search(
+#                 r"window\.__MSS__\.product\.state\s*=\s*({.*?});",
+#                 script.string,
+#                 re.DOTALL,
+#             )
+#             if json_match:
+#                 try:
+#                     json_data = json.loads(json_match.group(1))
+#                     if "goodsImages" in json_data:
+#                         for img in json_data["goodsImages"]:
+#                             # 상대 URL을 절대 URL로 변환
+#                             full_url = f"https://image.msscdn.net{img['imageUrl']}"
+#                             # images.append({
+#                             #     'seq': img['seq'],
+#                             #     'url': full_url
+#                             # })
+#                             images.append(full_url)
+#                 except json.JSONDecodeError:
+#                     print("JSON 파싱 오류 발생")
+
+#     # 방법 2: 정규식으로 직접 추출 (대체 방법)
+#     if not images:
+
+#         image_urls = re.findall(r'"imageUrl":"(\/images\/prd_img\/.*?)"', response.text)
+#         for i, url in enumerate(image_urls):
+#             full_url = f"https://image.msscdn.net{url}"
+#             # images.append({
+#             #     'seq': i+1,
+#             #     'url': full_url
+#             # })
+#             images.append(full_url)
+#     return images
+
+
+
 def extract_images(url):
     """
-    지정한 URL의 HTML에서 src 속성에 '/web/upload/NNEditor/'가 포함된 <img> 태그의 절대 URL을 리스트로 반환합니다.
+    지정한 URL의 HTML에서 goodsImages 또는 /images/prd_img/ 경로를 포함한 이미지 URL을 추출하여
+    중복 없이 리스트로 반환합니다.
     """
-
     response = requests.get(url, headers=headers)
     soup = BeautifulSoup(response.text, "html.parser")
 
-    # ✅ soup 전체 HTML 문자열로 변환
-
+    seen = set()
     images = []
 
-    # window.__MSS__.product.state에서 goodsImages 데이터 찾기
+    # 1) window.__MSS__.product.state에서 goodsImages 데이터 찾기
     script_tags = soup.find_all("script")
     for script in script_tags:
         if script.string and "goodsImages" in script.string:
-            # JSON 데이터 추출
             json_match = re.search(
                 r"window\.__MSS__\.product\.state\s*=\s*({.*?});",
                 script.string,
                 re.DOTALL,
             )
-            if json_match:
-                try:
-                    json_data = json.loads(json_match.group(1))
-                    if "goodsImages" in json_data:
-                        for img in json_data["goodsImages"]:
-                            # 상대 URL을 절대 URL로 변환
-                            full_url = f"https://image.msscdn.net{img['imageUrl']}"
-                            # images.append({
-                            #     'seq': img['seq'],
-                            #     'url': full_url
-                            # })
-                            images.append(full_url)
-                except json.JSONDecodeError:
-                    print("JSON 파싱 오류 발생")
+            if not json_match:
+                continue
 
-    # 방법 2: 정규식으로 직접 추출 (대체 방법)
+            try:
+                json_data = json.loads(json_match.group(1))
+            except json.JSONDecodeError:
+                print("JSON 파싱 오류 발생")
+                continue
+
+            if "goodsImages" in json_data:
+                for img in json_data["goodsImages"]:
+                    full_url = f"https://image.msscdn.net{img['imageUrl']}"
+                    if full_url not in seen:
+                        seen.add(full_url)
+                        images.append(full_url)
+
+    # 2) goodsImages가 없을 때, 정규식으로 /images/prd_img/ 경로 추출
     if not images:
-        # goodsImages 배열에서 imageUrl 추출
         image_urls = re.findall(r'"imageUrl":"(\/images\/prd_img\/.*?)"', response.text)
-        for i, url in enumerate(image_urls):
-            full_url = f"https://image.msscdn.net{url}"
-            # images.append({
-            #     'seq': i+1,
-            #     'url': full_url
-            # })
-            images.append(full_url)
+        for url_part in image_urls:
+            full_url = f"https://image.msscdn.net{url_part}"
+            if full_url not in seen:
+                seen.add(full_url)
+                images.append(full_url)
+
     return images
 
+
+# def extract_images(url):
+#     """
+#     지정한 URL의 HTML을 받아와서, <img> 태그 중 src 속성에
+#     '/thumbnails/images/'가 포함된 모든 썸네일 이미지 URL을 중복 없이 리스트로 반환합니다.
+#     """
+#     response = requests.get(url, headers=headers)
+#     soup = BeautifulSoup(response.text, "html.parser")
+
+#     seen = set()
+#     thumbnails = []
+
+#     # <img> 태그 중 src에 'thumbnails/images/'가 포함된 것만 골라서 수집
+#     for img_tag in soup.find_all("img", src=re.compile(r"/thumbnails/images/")):
+#         src = img_tag.get("src", "").strip()
+#         if not src:
+#             continue
+
+#         # 이미 절대 URL이면 그대로, 상대 경로면 msscdn 기준으로 절대 URL로 변경
+#         if src.startswith("http://") or src.startswith("https://"):
+#             full_url = src
+#         else:
+#             # msscdn 이미지를 기준으로 절대 URL 생성
+#             full_url = f"https://image.msscdn.net{src}"
+
+#         if full_url not in seen:
+#             seen.add(full_url)
+#             thumbnails.append(full_url)
+
+#     return thumbnails
 
 def load_image_from_url(url):
     """

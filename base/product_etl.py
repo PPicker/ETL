@@ -42,8 +42,8 @@ class BaseProductETL(ETLBaseConfig):
         INSERT INTO products
         (name, brand, brand_normalized, product_name_normalized, category, url,
         description_detail, description_semantic_raw, description_semantic,
-        original_price, discounted_price, sold_out, thumbnail_key, updated_at)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now())
+        original_price, discounted_price, sold_out, thumbnail_key, platform,updated_at)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now())
         ON CONFLICT (name, brand) DO UPDATE
         SET
             category = EXCLUDED.category,
@@ -55,9 +55,11 @@ class BaseProductETL(ETLBaseConfig):
             discounted_price = EXCLUDED.discounted_price,
             sold_out = EXCLUDED.sold_out,
             thumbnail_key = EXCLUDED.thumbnail_key,
+            platform = EXCLUDED.platform,
             updated_at = now()
         RETURNING id;
         """
+        
 
         image_query = """
         INSERT INTO product_images (product_id, key, is_thumbnail, order_index, clothing_only)
@@ -80,6 +82,7 @@ class BaseProductETL(ETLBaseConfig):
                 p.get("discounted_price"),
                 p["sold_out"],
                 p.get("thumbnail_key", None),  # 여기에 thumbnail_key 추가
+                self.platform,  # 플랫폼 정보 추가
             ),
         )
 

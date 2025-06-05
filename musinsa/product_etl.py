@@ -26,6 +26,7 @@ class Musinsa_ProductETL(BaseProductETL):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)  # 부모 클래스 초기화
         self.fashion_detector = FashionDetector()  # 추가 속성 초기화
+        self.s3_bucket = os.getenv("AWS_S3_BUCKET_NAME")
         self.ocr = OCR()
 
     def extract(self, brand_name, brand_url) -> List[dict]:
@@ -134,13 +135,7 @@ class Musinsa_ProductETL(BaseProductETL):
         thumbnail_entry = {}
         thumbnail_url = product["thumbnail_url"]
         thumbnail_image = load_image_from_url(thumbnail_url)
-        # self.fashion_detector.detect_person(thumbnail_image)
-        """
-        entry["url"],
-                entry["is_thumbnail"],
-                entry["order_index"], 
-                entry["clothing_only"]
-        """
+
         thumbnail_entry["is_thumbnail"] = True
         thumbnail_entry["order_index"] = 0
         thumbnail_entry["clothing_only"] = True
@@ -149,7 +144,7 @@ class Musinsa_ProductETL(BaseProductETL):
         if s3_url := upload_pil_image_to_s3(
             thumbnail_image,
             s3_image_path,
-            "ppicker",
+            self.s3_bucket,
             self.s3_client,
             format=image_format,
         ):
@@ -161,13 +156,13 @@ class Musinsa_ProductETL(BaseProductETL):
             tmp_entry = {"is_thumbnail": False, "order_index": idx + 1}
             image_format = get_normalized_image_format_from_url(image_url)
             image = load_image_from_url(image_url)
-            tmp_entry["clothing_only"] = self.fashion_detector.detect_person(image)
+            tmp_entry["clothing_only"] = False
             s3_image_path = s3_image_path_base + f"{uuid.uuid4()}"
             if s3_url := upload_pil_image_to_s3(
                 image, s3_image_path, "ppicker", self.s3_client, format=image_format
             ):
                 tmp_entry["key"] = s3_image_path
-                image_entries.append(thumbnail_entry)
+                image_entries.append(tmp_entry)
         product["image_entries"] = image_entries
         return product
 

@@ -28,22 +28,11 @@ def json2dict(product_json):
     }
 
 
-# def parse_product_list(product_jsons):
-#     driver = webdriver.Chrome(options=chrome_options)
-#     products = []
-#     for product_json in product_jsons:
-#         product = json2dict(product_json)
-#         product['image_urls'] =extract_images(product['url'])
-#         print(product)
-#         description_txt,description_image_urls = parse_product_detail(product['url'],driver) #꺼내오기만함 아직 가공 안되어있음
-#         product['description_txt'] = description_txt
-#         product['description_image_urls'] = description_image_urls
-#         products.append(product)
-#     return products
 
 
 
 def parse_product_list(product_jsons):
+
     products = []
     driver = None
     max_retries = 3  # 최대 재시도 횟수
@@ -123,23 +112,6 @@ if __name__ == "__main__":
     import re
     import json
 
-    url = "https://www.musinsa.com/products/4869537"
-    headers = {"User-Agent": "Mozilla/5.0"}
-    res = requests.get(url, headers=headers)
-
-    pattern = r"window\.__MSS__\.product\.state\s*=\s*(\{.*?\});"
-    match = re.search(pattern, res.text, re.DOTALL)
-
-    if match:
-        product_json = match.group(1)
-        product_data = json.loads(product_json)
-
-        image_urls = [
-            "https://image.msscdn.net" + img["imageUrl"]
-            for img in product_data.get("goodsImages", [])
-        ]
-
-        for img_url in image_urls:
-            print(img_url)
-    else:
-        print("❌ JavaScript 내 데이터 못 찾음.")
+    # url = "https://www.musinsa.com/products/4869537"
+    url = "https://www.musinsa.com/products/2005542"
+    print(extract_images(url))

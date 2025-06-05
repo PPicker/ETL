@@ -12,17 +12,12 @@ def to_natural_description(item: Dict[str, str]) -> str:
     미리 정의한 템플릿에 꽂아넣어서 깔끔한 문장으로 만들어 줍니다.
     """
     template = (
-        "{소재} 소재의 {세부_카테고리}입니다. "
-        "{색상_및_패턴}이 포인트이며, "
         "{디테일}을 갖추어 "
         "{분위기_및_지향점}을 연출합니다. "
         "{실루엣} 실루엣으로 디자인되었습니다."
     )
     # 키 이름에 공백이나 특수문자가 있으면 사전에 바꿔둡니다.
     safe = {
-        "세부_카테고리": item.get("세부 카테고리", ""),
-        "소재": item.get("소재", ""),
-        "색상_및_패턴": item.get("색상 및 패턴", ""),
         "디테일": item.get("디테일", ""),
         "분위기_및_지향점": item.get("분위기 및 지향점", ""),
         "실루엣": item.get("실루엣", ""),
@@ -46,6 +41,35 @@ def to_tagged_description(item: Dict[str, str], sep: str = " | ") -> str:
             parts.append(f"{f}: {v}")
     return sep.join(parts)
 
+
+
+
+def build_embedding_query(item: dict, use_prefix: bool = False) -> str:
+    """
+    item: 상품 메타데이터 dict
+    use_prefix=True  -> 'vibe: … silhouette: …'
+    use_prefix=False -> '… … …'
+    """
+    mapping = {
+        "색상 및 패턴": "color_and_pattern",
+        "분위기 및 지향점": "vibe",
+        "실루엣": "silhouette",
+        "디테일": "detail",
+    }
+
+    parts = []
+    for ko_field, en_prefix in mapping.items():
+        val = item.get(ko_field)
+        if not val:
+            continue
+        parts.append(
+            f"{en_prefix}: {val}" if use_prefix else val
+        )
+
+    return " ".join(parts).strip()
+
+
+
 class Gemini_Embedder():
     def __init__(self):
         self.tmp = 0
@@ -61,7 +85,7 @@ class Gemini_Embedder():
         self.wait_time = 10  # 대기 시간 (초)
             
     def embed(self, json_query):
-        text_query = to_natural_description(json_query)
+        text_query = build_embedding_query(json_query)
         max_retries = 3
         retry_count = 0
         
